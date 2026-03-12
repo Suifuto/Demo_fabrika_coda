@@ -20,10 +20,8 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
-        maven { url = uri( "https://artifacts.consensys.net/public/maven/maven/") }
     }
 }
 
 rootProject.name = "Demo_fabrika_coda"
 include(":app")
-include(":libs:nabu")

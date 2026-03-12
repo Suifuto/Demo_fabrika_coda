@@ -94,16 +94,15 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // ipfs
-    implementation(project(":libs:nabu"))
-//    implementation(libs.nabu) {
-//        exclude(group = "tech.pegasys", module = "noise-java")
-//    }
-//    implementation(libs.noise.java)
-    implementation("io.netty:netty-all:4.2.10.Final")
-    // io.ipfs
-    implementation("com.github.peergos:jvm-libp2p:0.20.0")
-    // io.libp2p
-    implementation("com.github.multiformats:java-multiaddr:v1.4.13")
+    implementation(libs.nabu) {
+        exclude(group = "tech.pegasys", module = "noise-java")
+    }
+    implementation(libs.noise.java)
+//    implementation("io.netty:netty-all:4.2.10.Final")
+//    // io.ipfs
+//    implementation("com.github.peergos:jvm-libp2p:0.20.0")
+//    // io.libp2p
+//    implementation("com.github.multiformats:java-multiaddr:v1.4.13")
 
     // Поддержка api < 33
 //    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)

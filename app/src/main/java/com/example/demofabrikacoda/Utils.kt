@@ -53,7 +53,7 @@ object Utils {
                 Log.d("IPFS", "authoriser $cid, $peerid, $auth")
                 CompletableFuture.completedFuture<Boolean?>(true)
             }
-        val builder: HostBuilder = HostBuilder(RamAddressBook()).generateIdentity()
+        val builder: HostBuilder = HostBuilder().generateIdentity()
         val privKey: PrivKey = builder.privateKey
         val peerId: PeerId? = builder.peerId
         val identity = IdentitySection(privKey.bytes(), peerId)
@@ -86,7 +86,7 @@ object Utils {
                 authoriser,
                 httpProxyTarget,
             )
-        ipfs?.start(false)
+        ipfs?.start()
 
         Log.d("IPFS-info", "IPFS.node peerId " + Utils.ipfs?.node?.peerId.toString())
     }
