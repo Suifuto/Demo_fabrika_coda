@@ -1,11 +1,17 @@
 package com.example.demofabrikacoda
 
 import android.util.Log
+import com.example.demofabrikacoda.data.PingModel
 import io.ipfs.cid.Cid
 import io.ipfs.multiaddr.MultiAddress
+import io.libp2p.core.Host
 import io.libp2p.core.PeerId
 import io.libp2p.core.Stream
 import io.libp2p.core.crypto.PrivKey
+import io.libp2p.core.multiformats.Multiaddr
+import io.libp2p.core.multistream.ProtocolBinding
+import io.libp2p.protocol.Ping
+import io.libp2p.protocol.PingController
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.HttpContent
 import org.peergos.BlockRequestAuthoriser
@@ -16,10 +22,13 @@ import org.peergos.RamAddressBook
 import org.peergos.Want
 import org.peergos.blockstore.RamBlockstore
 import org.peergos.config.IdentitySection
+import org.peergos.protocol.bitswap.Bitswap
+import org.peergos.protocol.bitswap.BitswapEngine
 import org.peergos.protocol.dht.RamRecordStore
 import org.peergos.protocol.http.HttpProtocol
 import java.net.InetSocketAddress
 import java.net.SocketAddress
+import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
@@ -84,6 +93,9 @@ object Utils {
 
     fun stopIpfs() {
         ipfs?.stop()
+        pingNode?.stop()
+        pingNode = null
+        pinger = null
     }
 
     fun getDataFromNode(
@@ -93,9 +105,6 @@ object Utils {
         if (ipfs == null || ipfs?.node == null) {
             startIpfs(node)
         }
-//        ipfs.node.listenAddresses().getOrNull(0)?.let {
-//            runPing(node = it)
-//        }
 
         // want - то что хотим запросить
         val wants = listOf<Want?>(
@@ -111,6 +120,71 @@ object Utils {
             )
 
         return blocks ?: listOf()
+    }
+
+    var pingNode: Host? = null
+
+    fun createPingNode() {
+        pingNode?.stop()
+        pingNode = HostBuilder.build(
+            10005,
+            listOf<ProtocolBinding<*>?>(
+                Ping(),
+                Bitswap(
+                    BitswapEngine(
+                        RamBlockstore(),
+                        BlockRequestAuthoriser { c: Cid?, p: Cid?, a: String? ->
+                            CompletableFuture.completedFuture<Boolean?>(
+                                true
+                            )
+                        },
+                        Bitswap.MAX_MESSAGE_SIZE
+                    )
+                )
+            )
+        )
+        pingNode?.start()?.join()
+        createPinger()
+    }
+
+    var pinger: PingController? = null
+
+    fun createPinger() {
+        val address2 =
+            Multiaddr.fromString(TEST_NODE)
+//            Multiaddr.fromString("/ip4/127.0.0.1/tcp/" + nodePort + "/p2p/" + node.peerId)
+
+        Log.d("IPFS-ping","Sending ping messages to $address2")
+
+        pinger = Ping()
+            .dial(pingNode!!, address2)
+            .controller
+            .join()
+    }
+
+    fun runIpfsPing(): PingModel? {
+        ipfs ?: return null
+        try {
+            if (pingNode == null || pinger == null) {
+                createPingNode()
+            }
+
+            val startTimeStamp = Instant.now()
+            val latency = pinger?.ping()?.join()
+            Log.d("IPFS-ping", "startTimeStamp $startTimeStamp latency $latency ms")
+
+            return PingModel(
+                timestamp = startTimeStamp,
+                latency = latency,
+                status = "Success"
+            )
+        } catch (e: Exception) {
+            return PingModel(
+                timestamp = Instant.now(),
+                latency = -1,
+                status = e.toString()
+            )
+        }
     }
 
 }

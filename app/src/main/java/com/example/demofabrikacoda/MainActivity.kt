@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
@@ -41,9 +42,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.demofabrikacoda.data.PingModel
 import com.example.demofabrikacoda.ui.theme.Demo_fabrika_codaTheme
 import io.ipfs.cid.Cid
 import org.peergos.HashedBlock
+import java.math.RoundingMode
+import java.text.DecimalFormat
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
@@ -75,6 +82,8 @@ fun Greeting(
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     val mainState by model.data.collectAsState()
+    val error by model.error.collectAsState()
+    val pingHistory by model.dataPing.collectAsState()
 
     Column(
         modifier =
@@ -88,15 +97,69 @@ fun Greeting(
         EnterCidField {
             model.loadDataFromNetwork(it)
         }
-        Text(
-            text = mainState.status,
-            modifier = modifier.padding(4.dp),
-        )
+        if (!error.isNullOrBlank()) {
+            Text(
+                text = error ?: "Ошибка вывода ошибки",
+                fontSize = 16.sp,
+                color = Color.Red,
+                modifier = modifier.padding(4.dp),
+            )
+        }
+        PingHistoryView(pingHistory = pingHistory)
+        if (!mainState.status.isNullOrBlank()) {
+            Text(
+                text = mainState.status,
+                modifier = modifier.padding(4.dp),
+            )
+        }
         if (mainState.blocks.isNotEmpty()) {
             BlockList(
                 mainState.blocks
             )
         }
+    }
+}
+
+@Composable
+fun PingHistoryView(
+    pingHistory: List<PingModel>
+) {
+    if (pingHistory.isEmpty()) return
+
+    val max = pingHistory.maxOfOrNull { it.latency ?: 0L } ?: 0L
+    val min = pingHistory.minOfOrNull { it.latency ?: 0L } ?: 0L
+    val jitter = max - min
+
+    val average = pingHistory.map { it.latency ?: 0L }.average()
+
+    val df = DecimalFormat("#.#")
+    df.roundingMode = RoundingMode.CEILING
+    df.format(average)
+
+    var viewTimestamp = ""
+    val formatter: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+    pingHistory[pingHistory.lastIndex].timestamp?.let {
+        viewTimestamp = it
+            .atZone(ZoneId.systemDefault())
+            .format(formatter)
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "$viewTimestamp"
+        )
+        Text(
+            text = "тек. ${pingHistory[pingHistory.lastIndex].latency} мс"
+        )
+        Text(
+            text = "сре. ${df.format(average)} мс"
+        )
+        Text(
+            text = "виб. ${df.format(jitter)} мс"
+        )
     }
 }
 
@@ -215,6 +278,15 @@ fun Preview() {
             listOf(
                 HashedBlock(Cid.decode(Utils.TEST_CID), byteArrayOf(0, 1)),
                 HashedBlock(Cid.decode(Utils.TEST_CID), byteArrayOf(1, 2)),
+            )
+        )
+        PingHistoryView(
+            listOf(
+                PingModel(null, latency = 10L, null),
+                PingModel( null, latency = 20L, null),
+                PingModel( null, latency = 40L, null),
+                PingModel( null, latency = 80L, null),
+                PingModel( null, latency = 120L, null),
             )
         )
     }
