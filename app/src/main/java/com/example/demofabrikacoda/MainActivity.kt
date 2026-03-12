@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -16,13 +17,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,14 +34,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.demofabrikacoda.ui.theme.Demo_fabrika_codaTheme
-import kotlinx.coroutines.flow.StateFlow
-
+import io.ipfs.cid.Cid
+import org.peergos.HashedBlock
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
@@ -52,48 +58,45 @@ class MainActivity : ComponentActivity() {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Greeting(
                         modifier = Modifier.padding(innerPadding),
-                        name = "Подключение",
-                        flow = viewModel.data,
-                        viewModel,
                     )
                 }
             }
         }
         viewModel.loadDataFromNetwork(Utils.TEST_CID)
-//        runBlocking<Unit> {
-//            launch(Dispatchers.IO) {
-//                println(Utils.getDataFromNode("",""))
-//            }
-//        }
     }
 }
 
 @Composable
 fun Greeting(
+    model: MainViewModel = viewModel(),
     modifier: Modifier = Modifier,
-    name: String,
-    flow: StateFlow<Result<String>?>,
-    viewModel: MainViewModel,
 ) {
     val topPadding = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     val bottomPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
-    val data by flow.collectAsState()
+    val mainState by model.data.collectAsState()
+
     Column(
         modifier =
             modifier
                 .fillMaxSize()
-                .padding(bottom = bottomPadding, top = topPadding),
+                .padding(10.dp, 0.dp),
+//                .padding(bottom = bottomPadding, top = topPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Top,
     ) {
         EnterCidField {
-            viewModel.loadDataFromNetwork(it)
+            model.loadDataFromNetwork(it)
         }
         Text(
-            text = "$data",
-            modifier = modifier.padding(10.dp),
+            text = mainState.status,
+            modifier = modifier.padding(4.dp),
         )
+        if (mainState.blocks.isNotEmpty()) {
+            BlockList(
+                mainState.blocks
+            )
+        }
     }
 }
 
@@ -105,7 +108,6 @@ fun EnterCidField(
     Row(
         modifier =
             modifier
-                .padding(10.dp)
                 .height(intrinsicSize = IntrinsicSize.Max),
     ) {
         val cid = remember { mutableStateOf(Utils.TEST_CID) }
@@ -114,7 +116,6 @@ fun EnterCidField(
             value = cid.value,
             onValueChange = { newText -> cid.value = newText },
             singleLine = false,
-            maxLines = 5,
             shape =
                 RoundedCornerShape(
                     topStart = CornerSize(15.dp),
@@ -149,6 +150,53 @@ fun EnterCidField(
     }
 }
 
+@Suppress("ParamsComparedByRef")
+@Composable
+fun BlockList(
+    cidBlocks: List<HashedBlock>
+) {
+    LazyColumn(
+        modifier = Modifier
+            .border(width = 1.dp, color = Color.DarkGray, shape = RoundedCornerShape(20.dp))
+            .padding(10.dp)
+    ) {
+        items(cidBlocks) { cidBlock ->
+            ItemListBlock(
+                hash = cidBlock.hash?.toString() ?: "",
+                block = cidBlock.block?.toString(Charsets.UTF_8)?.trim() ?: ""
+            )
+        }
+    }
+}
+
+@Composable
+fun ItemListBlock(
+    hash: String,
+    block: String
+) {
+    Row(
+        modifier = Modifier
+            .height(intrinsicSize = IntrinsicSize.Max)
+            .padding(0.dp, 8.dp)
+    ) {
+        Text(
+            modifier = Modifier.weight(2f),
+            text = hash
+        )
+        VerticalDivider(
+            color = Color.Red,
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(4.dp, 0.dp)
+                .width(1.dp)
+        )
+        Text(
+            modifier = Modifier.weight(3f),
+            text = block
+        )
+    }
+}
+
 // @Preview(showBackground = true)
 // @Composable
 // fun GreetingPreview() {
@@ -157,8 +205,17 @@ fun EnterCidField(
 //    }
 // }
 
-@Preview
+@Preview(showBackground = true)
 @Composable
-fun CustomizedTextFieldPreview() {
-    EnterCidField {}
+fun Preview() {
+    Column {
+        EnterCidField {}
+        ItemListBlock(hash = "a", block = "b")
+        BlockList(
+            listOf(
+                HashedBlock(Cid.decode(Utils.TEST_CID), byteArrayOf(0, 1)),
+                HashedBlock(Cid.decode(Utils.TEST_CID), byteArrayOf(1, 2)),
+            )
+        )
+    }
 }
