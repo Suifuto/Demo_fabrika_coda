@@ -1,31 +1,31 @@
 package com.example.demofabrikacoda
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class MainViewModel : ViewModel() {
-    companion object {
-        const val TEST_NODE =
-            "/dns4/ipfs.infra.cf.team/tcp/4001/p2p/12D3KooWKiqj21VphU2eE25438to5xeny6eP6d3PXT93ZczagPLT"
-        const val TEST_CID = "QmTBimFzPPP2QsB7TQGc2dr4BZD4i7Gm2X1mNtb6DqN9Dr"
-    }
-
     private val _data = MutableStateFlow<Result<String>?>(null)
     val data: StateFlow<Result<String>?> = _data
 
-    fun loadDataFromNetwork() {
-        viewModelScope.launch(Dispatchers.IO) {
+    private val exceptionHandler = CoroutineExceptionHandler { coroutineContext, throwable ->
+        _data.value = Result.failure(throwable)
+    }
+
+    fun loadDataFromNetwork(cid: String) {
+        viewModelScope.launch(Dispatchers.IO + exceptionHandler) {
             try {
-                val result = Utils.getDataFromNode(TEST_NODE, TEST_CID)
+                val result = Utils.getDataFromNode(Utils.TEST_NODE, cid)
 
                 _data.value = Result.success(result)
+                Log.d("IPFS", result)
             } catch (e: Exception) {
+                Log.d("IPFS", "Error $e")
                 _data.value = Result.failure(e)
             }
         }

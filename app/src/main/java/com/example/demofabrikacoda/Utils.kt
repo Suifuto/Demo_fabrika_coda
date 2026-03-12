@@ -6,6 +6,10 @@ import io.ipfs.multiaddr.MultiAddress
 import io.libp2p.core.PeerId
 import io.libp2p.core.Stream
 import io.libp2p.core.crypto.PrivKey
+import io.libp2p.core.multiformats.Multiaddr
+import io.libp2p.core.multistream.ProtocolBinding
+import io.libp2p.protocol.Ping
+import io.libp2p.protocol.PingController
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.HttpContent
 import org.peergos.BlockRequestAuthoriser
@@ -14,6 +18,8 @@ import org.peergos.HostBuilder
 import org.peergos.Want
 import org.peergos.blockstore.RamBlockstore
 import org.peergos.config.IdentitySection
+import org.peergos.protocol.bitswap.Bitswap
+import org.peergos.protocol.bitswap.BitswapEngine
 import org.peergos.protocol.dht.RamRecordStore
 import org.peergos.protocol.http.HttpProtocol
 import java.net.InetSocketAddress
@@ -23,6 +29,10 @@ import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
 
 object Utils {
+    const val TEST_NODE =
+        "/dns4/ipfs.infra.cf.team/tcp/4001/p2p/12D3KooWKiqj21VphU2eE25438to5xeny6eP6d3PXT93ZczagPLT"
+    const val TEST_CID = "QmTBimFzPPP2QsB7TQGc2dr4BZD4i7Gm2X1mNtb6DqN9Dr"
+
     fun getDataFromNode(
         node: String,
         cid: String,
@@ -43,7 +53,7 @@ object Utils {
         val privKey: PrivKey = builder.privateKey
         val peerId: PeerId? = builder.peerId
         val identity = IdentitySection(privKey.bytes(), peerId)
-        val provideBlocks = true
+        val provideBlocks = false
 
         val httpTarget: SocketAddress = InetSocketAddress("localhost", 10000)
         val httpProxyTarget: Optional<HttpProtocol.HttpRequestProcessor> =
@@ -74,30 +84,74 @@ object Utils {
             )
         ipfs.start()
 
-        Log.d("IPFS", "IPFS.node " + ipfs?.node.toString())
-        Log.d("IPFS", "IPFS.blockstore " + ipfs?.blockstore.toString())
-        Log.d("IPFS", "IPFS.records " + ipfs?.records.toString())
-        Log.d("IPFS", "IPFS.dht " + ipfs?.dht.toString())
-        Log.d("IPFS", "IPFS.bitswap " + ipfs?.bitswap.toString())
-        Log.d("IPFS", "IPFS.p2pHttp " + ipfs?.p2pHttp.toString())
-        Log.d("IPFS", "IPFS.blocks " + ipfs?.blocks.toString())
+        ipfs.node.listenAddresses().getOrNull(0)?.let {
+            runPing(node = it)
+        }
 
+        Log.d("IPFS-info", "IPFS.node peerId " + ipfs?.node?.peerId.toString())
+        Log.d("IPFS-info", "IPFS.blockstore " + ipfs?.blockstore?.get(Cid.decode(cid)))
+
+        // want - то что хотим запросить
         val wants =
 //            listOf<Want?>(Want(Cid.decode("zdpuAwfJrGYtiGFDcSV3rDpaUrqCtQZRxMjdC6Eq9PNqLqTGg")))
             listOf<Want?>(Want(Cid.decode(cid)))
-        val retrieveFrom =
-            setOf<PeerId?>(PeerId.fromBase58("QmVdFZgHnEgcedCS2G2ZNiEN59LuVrnRm7z3yXtEBv2XiF"))
+        // retrieveFrom - вот и что это? Это PeerId Откуда читаем или куда читаем. Какой сюда
+        // нужно подставлять или как оно само будет его искать?
+//        val retrieveFrom =
+//            setOf<PeerId?>(PeerId.fromBase58("QmVdFZgHnEgcedCS2G2ZNiEN59LuVrnRm7z3yXtEBv2XiF"))
         val addToLocal = true
+        var data: String
         val blocks =
             ipfs.getBlocks(
                 wants,
-                setOf(), // retrieveFrom,
+                setOf<PeerId?>(
+//                    PeerId.fromBase58("12D3KooWKiqj21VphU2eE25438to5xeny6eP6d3PXT93ZczagPLT"),
+                ),
                 addToLocal,
             )
-        val data = blocks.get(0)?.block
+        data = blocks.getOrNull(0)?.block.toString()
 
-        return "Received ${data?.size} bytes"
-        return "Подключи либу"
+        return data
+    }
+
+    fun runPing(
+        port: Int = 10005,
+        node: Multiaddr,
+    ) {
+        val localHostNode =
+            HostBuilder.build(
+                port,
+                listOf<ProtocolBinding<*>?>(
+                    Ping(),
+                    Bitswap(
+                        BitswapEngine(
+                            RamBlockstore(),
+                            BlockRequestAuthoriser { c: Cid?, p: Cid?, a: String? ->
+                                CompletableFuture.completedFuture<Boolean?>(
+                                    true,
+                                )
+                            },
+                            Bitswap.MAX_MESSAGE_SIZE,
+                        ),
+                    ),
+                ),
+            )
+        localHostNode.start().join()
+        try {
+            val pinger: PingController =
+                Ping()
+                    .dial(localHostNode, node)
+                    .controller
+                    .join()
+
+            Log.d("IPFS-ping", "Sending ping messages to $node")
+            for (i in 0..5) {
+                val latency = pinger.ping().join()
+                Log.d("IPFS-ping", "Ping " + i + ", latency " + latency + "ms")
+            }
+        } finally {
+            localHostNode.stop()
+        }
     }
 
     //

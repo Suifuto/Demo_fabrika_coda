@@ -32,7 +32,7 @@ android {
         }
     }
     compileOptions {
-        isCoreLibraryDesugaringEnabled = true
+//        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -49,11 +49,12 @@ android {
                     "META-INF/*.RSA",
                     "META-INF/INDEX.LIST",
                     "META-INF/license/*",
-//                    "META-INF/license/LICENSE.jbzip2.txt",
-//                    "META-INF/license/LICENSE.webbit.txt",
-//                    "META-INF/license/LICENSE.snappy.txt",
                 )
-            pickFirsts += "/META-INF/io.netty.versions.properties"
+            pickFirsts +=
+                listOf(
+                    "META-INF/io.netty.versions.properties",
+                    "META-INF/native-image/io.netty.incubator/netty-incubator-codec-native-quic/*",
+                )
         }
     }
 }
@@ -77,6 +78,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.ui.graphics)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -92,7 +94,7 @@ dependencies {
     }
 //    implementation("io.netty:netty-all:4.2.10.Final")
 //    implementation("tech.pegasys:noise-java:22.1.0")
-    implementation("com.github.ConsenSys:noise-java:22.1.0")
+    implementation(libs.noise.java)
 
 //    constraints {
 //        implementation("tech.pegasys:noise-java") {
@@ -103,5 +105,5 @@ dependencies {
 //    }
 
     // Поддержка api < 33
-    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
+//    coreLibraryDesugaring(libs.desugar.jdk.libs.nio)
 }

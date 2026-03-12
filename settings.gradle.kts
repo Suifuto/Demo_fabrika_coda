@@ -35,3 +35,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Demo_fabrika_coda"
 include(":app")
+include(":libs:nabu")
