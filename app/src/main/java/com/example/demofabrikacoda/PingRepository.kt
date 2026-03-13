@@ -2,6 +2,7 @@ package com.example.demofabrikacoda
 
 import android.util.Log
 import com.example.demofabrikacoda.data.PingModel
+import com.example.demofabrikacoda.data.toConvert
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -17,25 +18,38 @@ import java.time.Instant
 
 class PingRepository(
     private val coroutineScope: CoroutineScope,
-    private val coroutineExceptionHandler: CoroutineExceptionHandler
+    private val ipfsRepository: IpfsRepository
 ) {
+    private val exceptionHandlerPing = CoroutineExceptionHandler { coroutineContext, throwable ->
+        _status.value = throwable.toConvert() + "\n Соединение с нодой разорвано"
+        stopPingCycle()
+        ipfsRepository.stopIpfs()
+    }
 
     private val _history = MutableStateFlow<List<PingModel>>(emptyList())
     val history: StateFlow<List<PingModel>> = _history.asStateFlow()
 
+    private val _status = MutableStateFlow<String?>("Ожидает инициализации ноды")
+    val status: StateFlow<String?> = _status
+
     private var pingJob: Job? = null
 
     fun startPingCycle() {
-        if (pingJob?.isActive == true) return
+        if (pingJob?.isActive == true) {
+            _status.value = "Пинг активен"
+            return
+        }
+        _status.value = "Инициализация пинг"
 
-        pingJob = coroutineScope.launch(Dispatchers.IO + coroutineExceptionHandler) {
+        pingJob = coroutineScope.launch(Dispatchers.IO + exceptionHandlerPing) {
             while (isActive) {
-                val result = Utils.runIpfsPing()
+                val startTimeStamp = Instant.now()
+                val result = ipfsRepository.runIpfsPing()
 
                 // История (FIFO, макс 10)
-                result?.let {
+                if (result != null) {
                     _history.update { currentList ->
-                        val newList = currentList + result
+                        val newList = currentList + PingModel(timestamp = startTimeStamp, latency = result)
                         if (newList.size > 10) {
                             newList.drop(1)
                         } else {
@@ -43,13 +57,9 @@ class PingRepository(
                         }
                     }
                 }
+                _status.value = ""
 
-                //Расчет задержки в мс
-                val targetDelay = 2000L
-                val timestampDiff = Instant.now().minusMillis(result?.timestamp?.toEpochMilli() ?: 0L)
-                val needDelay =  targetDelay - (timestampDiff.toEpochMilli())
-                Log.d("IPFS-ping", "timestampDiff $timestampDiff needDelay $needDelay")
-
+                val needDelay = getTargetDelay(startTimeStamp = startTimeStamp)
                 if (needDelay > 0) {
                     delay(needDelay)
                 }
@@ -57,7 +67,17 @@ class PingRepository(
         }
     }
 
+    /**
+     * Расчет задержки в мс
+     */
+    private fun getTargetDelay(targetDelay: Long = 3000L, startTimeStamp: Instant): Long {
+        val timestampDiff = Instant.now().minusMillis(startTimeStamp.toEpochMilli())
+//        Log.d("IPFS-ping", "timestampDiff $timestampDiff needDelay $needDelay")
+        return targetDelay - (timestampDiff.toEpochMilli())
+    }
+
     fun stopPingCycle() {
+        _status.value = "Стоп пинг"
         pingJob?.cancel()
         pingJob = null
     }
